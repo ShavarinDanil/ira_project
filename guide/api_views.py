@@ -90,12 +90,16 @@ def register(request):
         if cursor.fetchone():
             return Response({'error': 'Пользователь с таким именем уже существует'}, status=status.HTTP_400_BAD_REQUEST)
         
-    # Для создания пользователя всё же используем Django create_user (для хеширования пароля), 
-    # но проверку существования выше сделали через RAW SQL
-    user = User.objects.create_user(username=username, email=email, password=password,
-                                    first_name=first_name, last_name=last_name, phone=phone)
-    auth_login(request, user)
-    return Response(UserSerializer(user).data)
+    try:
+        # Для создания пользователя всё же используем Django create_user (для хеширования пароля)
+        user = User.objects.create_user(username=username, email=email, password=password,
+                                        first_name=first_name, last_name=last_name, phone=phone)
+        auth_login(request, user)
+        return Response(UserSerializer(user).data)
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        return Response({'error': f'Ошибка при создании: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])

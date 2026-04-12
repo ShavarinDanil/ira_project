@@ -2,11 +2,16 @@
 # exit on error
 set -o errexit
 
-# Установка зависимостей Python
+# Установка зависимостей
+pip install --upgrade pip
 pip install -r requirements.txt
+pip install Pillow  # Явно ставим Pillow для работы с изображениями
 
-# Сборка статики
+# Сборка фронтенда (если нужно, но мы уже запушили dist)
+# npm install && npm run build
+
+# Сборка статики Django
 python manage.py collectstatic --no-input
 
-# Применение миграций БД
+# Миграции
 python manage.py migrate
