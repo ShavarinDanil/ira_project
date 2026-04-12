@@ -81,28 +81,30 @@ export default function Feed() {
           <div className="carousel-wrapper">
             <div className="carousel-inner" style={{ transform: `translateX(-${currentEventIndex * 256}px)` }}>
               {data.events.map(event => (
-                <div className="h-card" key={event.id}>
-                  {event.photo_url ? (
-                    <img className="card-img" src={event.photo_url} alt={event.name} onError={(e) => { e.target.onerror = null; e.target.src = getAppropriateImage(event.name, event.id); }} />
-                  ) : <img className="card-img" src={getAppropriateImage(event.name, event.id)} alt={event.name} />}
-                  <div className="card-body">
-                    <div className="card-title">{event.name}</div>
-                    <div className="card-sub">{new Date(event.start_time).toLocaleDateString()}</div>
-                    {event.location && (
-                      <div className="card-sub" style={{ marginTop: 4 }}>
-                        <i className="fas fa-map-marker-alt" style={{ color: 'var(--green)', fontSize: 10 }}></i> {event.location.name}
-                      </div>
-                    )}
-                    {event.location?.latitude && event.location?.longitude && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleRoute(event.location.latitude, event.location.longitude, event.name); }}
-                        style={{ marginTop: 8, background: '#0D4433', color: 'white', border: 'none', borderRadius: 10, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center' }}
-                      >
-                        <i className="fas fa-route"></i> Маршрут к событию
-                      </button>
-                    )}
+                <Link to={`/location/${event.location?.id}`} key={event.id} style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <div className="h-card">
+                    {event.photo_url ? (
+                      <img className="card-img" src={event.photo_url} alt={event.name} onError={(e) => { e.target.onerror = null; e.target.src = getAppropriateImage(event.name, event.id); }} />
+                    ) : <img className="card-img" src={getAppropriateImage(event.name, event.id)} alt={event.name} />}
+                    <div className="card-body">
+                      <div className="card-title">{event.name}</div>
+                      <div className="card-sub">{new Date(event.start_time).toLocaleDateString()}</div>
+                      {event.location && (
+                        <div className="card-sub" style={{ marginTop: 4 }}>
+                          <i className="fas fa-map-marker-alt" style={{ color: 'var(--green)', fontSize: 10 }}></i> {event.location.name}
+                        </div>
+                      )}
+                      {event.location?.latitude && event.location?.longitude && (
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRoute(event.location.latitude, event.location.longitude, event.name); }}
+                          style={{ marginTop: 8, background: '#0D4433', color: 'white', border: 'none', borderRadius: 10, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center' }}
+                        >
+                          <i className="fas fa-route"></i> Построить маршрут
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>
@@ -135,9 +137,11 @@ export default function Feed() {
         <div className="section-grid">
           {data.locations.map(loc => (
           <div className="card" key={loc.id}>
-            {loc.photo_url ? (
-              <img className="card-img" src={loc.photo_url} alt={loc.name} onClick={() => window.location.href=`/location/${loc.id}`} onError={(e) => { e.target.onerror = null; e.target.src = NATURE_PICS[loc.id % NATURE_PICS.length]; }} />
-            ) : <img className="card-img" src={NATURE_PICS[loc.id % NATURE_PICS.length]} alt={loc.name} onClick={() => window.location.href=`/location/${loc.id}`} />}
+            <Link to={`/location/${loc.id}`}>
+              {loc.photo_url ? (
+                <img className="card-img" src={loc.photo_url} alt={loc.name} onError={(e) => { e.target.onerror = null; e.target.src = NATURE_PICS[loc.id % NATURE_PICS.length]; }} />
+              ) : <img className="card-img" src={NATURE_PICS[loc.id % NATURE_PICS.length]} alt={loc.name} />}
+            </Link>
             <div className="card-body">
               <div className="card-title">
                 <Link to={`/location/${loc.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>{loc.name}</Link>
