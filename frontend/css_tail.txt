@@ -1,0 +1,1 @@
+in-width: 240px; } .app-bar h1 { font-size: 24px; } .bottom-nav { width: 100%; bottom: 0; border-radius: 0; left: 0; transform: none; } }\n.chips, .route-cards-container, .h-scroll { display: flex !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; scrollbar-width: none; }\n}

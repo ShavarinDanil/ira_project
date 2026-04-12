@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Угра Гид</string>
+    <string name="title_activity_main">Угра Гид</string>
+    <string name="package_name">ru.ugra.guide</string>
+    <string name="custom_url_scheme">ru.ugra.guide</string>
+</resources>

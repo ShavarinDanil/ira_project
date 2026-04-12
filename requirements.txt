@@ -1,0 +1,9 @@
+django>=4.2,<5.0
+requests
+django-environ
+djangorestframework
+django-cors-headers
+psycopg2-binary
+dj-database-url
+whitenoise
+gunicorn
