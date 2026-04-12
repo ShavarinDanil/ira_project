@@ -5,7 +5,9 @@ import os
 import sys
 
 def migrate(postgres_url):
-    sqlite_db = 'db.sqlite3'
+    sqlite_db = 'db.sqlite3.backup'
+    if not os.path.exists(sqlite_db):
+        sqlite_db = 'db.sqlite3'
     
     if not os.path.exists(sqlite_db):
         print("SQLite database not found!")
@@ -55,7 +57,15 @@ def migrate(postgres_url):
         
         count = 0
         for row in rows:
-            m_cur.execute(sql, tuple(row))
+            # Преобразуем 0/1 в True/False для булевых полей
+            clean_row = []
+            for col in columns:
+                val = row[col]
+                if col in ['is_superuser', 'is_staff', 'is_active']:
+                    val = bool(val)
+                clean_row.append(val)
+                
+            m_cur.execute(sql, tuple(clean_row))
             count += 1
         
         print(f"  Done! Migrated {count} rows.")

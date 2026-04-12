@@ -6,11 +6,12 @@ import axios from 'axios';
  * Все SQL-запросы теперь выполняются на стороне сервера в MySQL.
  */
 
-// Определяем базовый URL: если мы на localhost, стучимся на 8000 порт. 
-// Если в продакшене (Render) - используем относительный путь.
-const API_BAR = window.location.hostname === 'localhost' 
-    ? 'http://localhost:8000/api' 
-    : '/api';
+// Определяем базовый URL для APK и веб-версии
+const RENDER_URL = 'https://ira-project-ep8l.onrender.com';
+
+const API_BAR = (window.Capacitor || window.location.hostname !== 'localhost')
+    ? `${RENDER_URL}/api`
+    : 'http://localhost:8000/api';
 
 // Настройка axios для работы с Django (куки, заголовки)
 axios.defaults.withCredentials = true;

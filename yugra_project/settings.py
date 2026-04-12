@@ -108,7 +108,21 @@ WHITENOISE_ROOT = BASE_DIR / 'frontend' / 'dist'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'guide.User'
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'https://ira-project-ep8l.onrender.com',
+]
+CORS_ALLOW_ALL_ORIGINS = True # Для разработки и APK
+CORS_ALLOW_CREDENTIALS = True
+
+# Дополнительные настройки для APK (Capacitor)
+CSRF_TRUSTED_ORIGINS = [
+    'https://ira-project-ep8l.onrender.com',
+    'capacitor://localhost',
+    'http://localhost',
+]
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
