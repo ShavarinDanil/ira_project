@@ -46,13 +46,13 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'yugra_project.urls'
 
+# Настройка папок фронтенда
+FRONTEND_DIR = BASE_DIR / 'frontend' / 'dist'
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [
-            BASE_DIR / 'templates',
-            BASE_DIR / 'frontend' / 'dist', # Чтобы Django видел index.html от React
-        ],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -65,10 +65,13 @@ TEMPLATES = [
     },
 ]
 
+# Если папка фронтенда существует, добавляем её в поиск шаблонов (для index.html)
+if FRONTEND_DIR.exists():
+    TEMPLATES[0]['DIRS'].append(str(FRONTEND_DIR))
+
 WSGI_APPLICATION = 'yugra_project.wsgi.application'
 
 # Database
-# Если есть переменная DATABASE_URL (в облаке), берем её. Иначе - локальный MySQL.
 DATABASES = {
     'default': dj_database_url.config(
         default='mysql://root:349151210@localhost:3306/ugra_db',
@@ -94,16 +97,18 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Добавляем пути к статике React
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
-    BASE_DIR / 'frontend' / 'dist',
-    BASE_DIR / 'frontend' / 'dist' / 'assets',
 ]
 
+# Добавляем фронтенд в статику только если он есть
+if FRONTEND_DIR.exists():
+    STATICFILES_DIRS.append(str(FRONTEND_DIR))
+    if (FRONTEND_DIR / 'assets').exists():
+        STATICFILES_DIRS.append(str(FRONTEND_DIR / 'assets'))
+
 # WhiteNoise settings
-# Позволяет раздавать React файлы напрямую из корня
-WHITENOISE_ROOT = BASE_DIR / 'frontend' / 'dist'
+WHITENOISE_ROOT = str(FRONTEND_DIR) if FRONTEND_DIR.exists() else None
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'guide.User'
