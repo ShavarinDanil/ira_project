@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import get_user_model
+from rest_framework.authtoken.models import Token
 from .models import Location, Event, Route, Transport, Favorite, VisitedLocation, Review
 from .serializers import (UserSerializer, LocationSerializer, EventSerializer, 
                           RouteSerializer, TransportSerializer, ReviewSerializer)
@@ -58,7 +59,11 @@ def login(request):
     user = authenticate(request, username=username, password=password)
     if user:
         auth_login(request, user)
-        return Response(UserSerializer(user).data)
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response({
+            'user': UserSerializer(user).data,
+            'token': token.key
+        })
     return Response({'error': 'Неверный логин или пароль'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
@@ -75,7 +80,11 @@ def register(request):
     user = User.objects.create_user(username=username, email=email, password=password,
                                     first_name=first_name, last_name=last_name, phone=phone)
     auth_login(request, user)
-    return Response(UserSerializer(user).data)
+    token, _ = Token.objects.get_or_create(user=user)
+    return Response({
+        'user': UserSerializer(user).data,
+        'token': token.key
+    })
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])

@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'guide',
     'rest_framework',
+    'rest_framework.authtoken',
     'corsheaders',
     'whitenoise.runserver_nostatic', # Для того, чтобы WhiteNoise работал в dev режиме
 ]
@@ -130,6 +131,7 @@ CSRF_TRUSTED_ORIGINS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ],
