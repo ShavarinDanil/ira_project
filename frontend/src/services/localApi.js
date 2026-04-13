@@ -9,12 +9,9 @@ import axios from 'axios';
 // Определяем базовый URL для APK и веб-версии
 const RENDER_URL = 'https://ira-project-ep8l.onrender.com';
 
-const API_BAR = (
-    window.location.port !== '5173' || 
-    window.location.hostname !== 'localhost' || 
-    (window.navigator.userAgent && window.navigator.userAgent.includes('Electron')) ||
-    window.Capacitor
-) ? `${RENDER_URL}/api` : 'http://localhost:8000/api';
+const API_BAR = (window.location.port === '5173') 
+    ? 'http://localhost:8000/api' 
+    : `${RENDER_URL}/api`;
 console.log("[API] Connecting to:", API_BAR);
 
 // Настройка axios для работы с Django (куки, заголовки)
