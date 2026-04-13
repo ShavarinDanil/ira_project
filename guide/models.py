@@ -92,8 +92,7 @@ class VisitedLocation(models.Model):
 
 class Review(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews')
-    location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='reviews', null=True, blank=True)
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='reviews', null=True, blank=True)
+    location = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='reviews')
     rating = models.IntegerField()
     text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)

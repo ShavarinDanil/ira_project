@@ -7,20 +7,11 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth import get_user_model
-from django.db import connection
 from .models import Location, Event, Route, Transport, Favorite, VisitedLocation, Review
 from .serializers import (UserSerializer, LocationSerializer, EventSerializer, 
                           RouteSerializer, TransportSerializer, ReviewSerializer)
 
 User = get_user_model()
-
-def dictfetchall(cursor):
-    """Return all rows from a cursor as a dict"""
-    columns = [col[0] for col in cursor.description]
-    return [
-        dict(zip(columns, row))
-        for row in cursor.description and cursor.fetchall()
-    ]
 
 KMAO_CITIES = [
     {"name": "Ханты-Мансийск", "lat": 61.003, "lon": 69.017},
@@ -52,17 +43,12 @@ def get_weather_data(city_index=0):
         return {'temperature': 0, 'windspeed': 0, 'city': city['name'], 'all_cities': [c['name'] for c in KMAO_CITIES]}
 
 def get_meta(user):
-    fav_ids = []
-    visited_ids = []
+    fav_ids = set()
+    visited_ids = set()
     if user.is_authenticated:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT item_id FROM guide_favorite WHERE user_id = %s AND item_type = 'location'", [user.id])
-            fav_ids = [row[0] for row in cursor.fetchall()]
-            
-            cursor.execute("SELECT location_id FROM guide_visitedlocation WHERE user_id = %s", [user.id])
-            visited_ids = [row[0] for row in cursor.fetchall()]
-            
-    return {'fav_ids': fav_ids, 'visited_ids': visited_ids}
+        fav_ids = set(Favorite.objects.filter(user=user, item_type='location').values_list('item_id', flat=True))
+        visited_ids = set(VisitedLocation.objects.filter(user=user).values_list('location_id', flat=True))
+    return {'fav_ids': list(fav_ids), 'visited_ids': list(visited_ids)}
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -84,22 +70,12 @@ def register(request):
     first_name = request.data.get('first_name', '')
     last_name = request.data.get('last_name', '')
     phone = request.data.get('phone', '')
-    
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT id FROM guide_user WHERE username = %s", [username])
-        if cursor.fetchone():
-            return Response({'error': 'Пользователь с таким именем уже существует'}, status=status.HTTP_400_BAD_REQUEST)
-        
-    try:
-        # Для создания пользователя всё же используем Django create_user (для хеширования пароля)
-        user = User.objects.create_user(username=username, email=email, password=password,
-                                        first_name=first_name, last_name=last_name, phone=phone)
-        auth_login(request, user)
-        return Response(UserSerializer(user).data)
-    except Exception as e:
-        import traceback
-        print(traceback.format_exc())
-        return Response({'error': f'Ошибка при создании: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    if User.objects.filter(username=username).exists():
+        return Response({'error': 'Пользователь с таким именем уже существует'}, status=status.HTTP_400_BAD_REQUEST)
+    user = User.objects.create_user(username=username, email=email, password=password,
+                                    first_name=first_name, last_name=last_name, phone=phone)
+    auth_login(request, user)
+    return Response(UserSerializer(user).data)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -110,22 +86,12 @@ def logout(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def feed(request):
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT * FROM guide_location ORDER BY rating DESC LIMIT 50")
-        locations = dictfetchall(cursor)
-        
-        cursor.execute("""
-            SELECT e.*, l.name as location_name, l.latitude, l.longitude
-            FROM guide_event e
-            LEFT JOIN guide_location l ON e.location_id = l.id
-            ORDER BY e.start_time ASC LIMIT 30
-        """)
-        events = dictfetchall(cursor)
-
+    locations = Location.objects.order_by('-rating')[:50]
+    events = Event.objects.select_related('location').order_by('start_time')[:30]
     weather = get_weather_data()
     return Response({
-        'locations': locations,  # Данные уже в формате словарей
-        'events': events,
+        'locations': LocationSerializer(locations, many=True).data,
+        'events': EventSerializer(events, many=True).data,
         'weather': weather,
         'meta': get_meta(request.user)
     })
@@ -135,136 +101,58 @@ def feed(request):
 def objects_list(request):
     search = request.GET.get('q', '')
     category = request.GET.get('category', '')
-    
-    sql = "SELECT * FROM guide_location WHERE 1=1"
-    params = []
+    locations = Location.objects.all()
     if search:
-        sql += " AND name LIKE %s"
-        params.append(f"%{search}%")
+        locations = locations.filter(name__icontains=search)
     if category:
-        sql += " AND category LIKE %s"
-        params.append(f"%{category}%")
-    
-    sql += " ORDER BY name LIMIT 300"
-    
-    with connection.cursor() as cursor:
-        cursor.execute(sql, params)
-        locations = dictfetchall(cursor)
-        
-        cursor.execute("SELECT DISTINCT category FROM guide_location")
-        categories = [row[0] for row in cursor.fetchall()]
-
+        locations = locations.filter(category__icontains=category)
+    categories = Location.objects.values_list('category', flat=True).distinct()
     return Response({
-        'locations': locations,
-        'categories': categories,
+        'locations': LocationSerializer(locations.order_by('name')[:300], many=True).data,
+        'categories': list(categories),
         'meta': get_meta(request.user)
     })
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def routes_list(request):
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT * FROM guide_route")
-        routes = dictfetchall(cursor)
-        
-        cursor.execute("SELECT * FROM guide_transport ORDER BY city, type")
-        transports_raw = dictfetchall(cursor)
-    
+    routes = Route.objects.all()
+    transports_raw = Transport.objects.order_by('city', 'type')
     transports_by_city = {}
     for t in transports_raw:
-        city = t['city']
-        if city not in transports_by_city:
-            transports_by_city[city] = []
-        transports_by_city[city].append(t)
+        if t.city not in transports_by_city:
+            transports_by_city[t.city] = []
+        transports_by_city[t.city].append(TransportSerializer(t).data)
     
     return Response({
-        'routes': routes,
+        'routes': RouteSerializer(routes, many=True).data,
         'transports_by_city': transports_by_city
     })
 
 @api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def location_detail(request, location_id):
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT * FROM guide_location WHERE id = %s", [location_id])
-        location_rows = dictfetchall(cursor)
-        if not location_rows:
-            return Response(status=404)
-        location = location_rows[0]
+    try:
+        location = Location.objects.get(id=location_id)
+    except Location.DoesNotExist:
+        return Response(status=404)
+        
+    if request.method == 'POST':
+        if not request.user.is_authenticated:
+            return Response({'error': 'Необходима авторизация'}, status=status.HTTP_401_UNAUTHORIZED)
+        rating = request.data.get('rating')
+        text = request.data.get('text')
+        if rating and text:
+            Review.objects.create(user=request.user, location=location, rating=int(rating), text=text)
+            avg_rating = Review.objects.filter(location=location).aggregate(Avg('rating'))['rating__avg']
+            location.rating = round(avg_rating, 1) if avg_rating else 0.0
+            location.save()
+            return Response({'status': 'ok'})
             
-        if request.method == 'POST':
-            if not request.user.is_authenticated:
-                return Response({'error': 'Необходима авторизация'}, status=status.HTTP_401_UNAUTHORIZED)
-            rating = request.data.get('rating')
-            text = request.data.get('text')
-            if rating and text:
-                cursor.execute("""
-                    INSERT INTO guide_review (user_id, location_id, rating, text, created_at)
-                    VALUES (%s, %s, %s, %s, NOW())
-                """, [request.user.id, location_id, int(rating), text])
-                
-                cursor.execute("SELECT AVG(rating) FROM guide_review WHERE location_id = %s", [location_id])
-                avg_rating = cursor.fetchone()[0]
-                new_rating = round(float(avg_rating), 1) if avg_rating else 0.0
-                cursor.execute("UPDATE guide_location SET rating = %s WHERE id = %s", [new_rating, location_id])
-                return Response({'status': 'ok'})
-                
-        # Raw SQL выборка отзывов с JOIN пользователя
-        cursor.execute("""
-            SELECT r.*, u.username as user_name
-            FROM guide_review r
-            JOIN guide_user u ON r.user_id = u.id
-            WHERE r.location_id = %s
-            ORDER BY r.created_at DESC
-        """, [location_id])
-        reviews = dictfetchall(cursor)
-
+    reviews = location.reviews.select_related('user').order_by('-created_at')
     return Response({
-        'location': location,
-        'reviews': reviews,
-        'meta': get_meta(request.user)
-    })
-
-@api_view(['GET', 'POST'])
-@permission_classes([AllowAny])
-def event_detail(request, event_id):
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT e.*, l.name as location_name, l.latitude, l.longitude
-            FROM guide_event e
-            LEFT JOIN guide_location l ON e.location_id = l.id
-            WHERE e.id = %s
-        """, [event_id])
-        event_rows = dictfetchall(cursor)
-        if not event_rows:
-            return Response(status=404)
-        event = event_rows[0]
-            
-        if request.method == 'POST':
-            if not request.user.is_authenticated:
-                return Response({'error': 'Необходима авторизация'}, status=status.HTTP_401_UNAUTHORIZED)
-            rating = request.data.get('rating')
-            text = request.data.get('text')
-            if rating and text:
-                cursor.execute("""
-                    INSERT INTO guide_review (user_id, event_id, rating, text, created_at)
-                    VALUES (%s, %s, %s, %s, NOW())
-                """, [request.user.id, event_id, int(rating), text])
-                return Response({'status': 'ok'})
-                
-        # Выборка отзывов именно для этого события
-        cursor.execute("""
-            SELECT r.*, u.username as user_name
-            FROM guide_review r
-            JOIN guide_user u ON r.user_id = u.id
-            WHERE r.event_id = %s
-            ORDER BY r.created_at DESC
-        """, [event_id])
-        reviews = dictfetchall(cursor)
-
-    return Response({
-        'event': event,
-        'reviews': reviews,
+        'location': LocationSerializer(location).data,
+        'reviews': ReviewSerializer(reviews, many=True).data,
         'meta': get_meta(request.user)
     })
 
@@ -276,26 +164,21 @@ def profile(request):
         request.user.save()
         return Response({'status': 'ok', 'avatar': request.user.avatar.url})
 
-    with connection.cursor() as cursor:
-        # RAW SQL: получение избранных локаций через JOIN или IN
-        cursor.execute("""
-            SELECT l.* FROM guide_location l
-            JOIN guide_favorite f ON l.id = f.item_id
-            WHERE f.user_id = %s AND f.item_type = 'location'
-            ORDER BY f.added_at DESC
-        """, [request.user.id])
-        fav_locations = dictfetchall(cursor)
-        
-        # RAW SQL: подсчет отзывов и посещений
-        cursor.execute("SELECT COUNT(*) FROM guide_review WHERE user_id = %s", [request.user.id])
-        review_count = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(*) FROM guide_visitedlocation WHERE user_id = %s", [request.user.id])
-        visited_count = cursor.fetchone()[0]
+    favorites = Favorite.objects.filter(user=request.user, item_type='location').order_by('-added_at')
+    review_count = request.user.reviews.count()
+    visited_count = request.user.visited_locations.count()
+    
+    fav_locations = []
+    for fav in favorites:
+        try:
+            loc = Location.objects.get(id=fav.item_id)
+            fav_locations.append(loc)
+        except Location.DoesNotExist:
+            pass
             
     return Response({
         'user': UserSerializer(request.user).data,
-        'fav_locations': fav_locations,
+        'fav_locations': LocationSerializer(fav_locations, many=True).data,
         'review_count': review_count,
         'visited_count': visited_count,
     })
@@ -303,33 +186,24 @@ def profile(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def toggle_favorite(request, location_id):
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT id FROM guide_favorite WHERE user_id = %s AND item_type = 'location' AND item_id = %s", 
-                       [request.user.id, location_id])
-        row = cursor.fetchone()
-        if row:
-            cursor.execute("DELETE FROM guide_favorite WHERE id = %s", [row[0]])
-            status_action = 'removed'
-        else:
-            cursor.execute("INSERT INTO guide_favorite (user_id, item_type, item_id, added_at) VALUES (%s, %s, %s, NOW())", 
-                           [request.user.id, 'location', location_id])
-            status_action = 'added'
+    fav, created = Favorite.objects.get_or_create(user=request.user, item_type='location', item_id=location_id)
+    if not created:
+        fav.delete()
+        status_action = 'removed'
+    else:
+        status_action = 'added'
     return Response({'status': status_action})
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def toggle_visited(request, location_id):
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT id FROM guide_visitedlocation WHERE user_id = %s AND location_id = %s", 
-                       [request.user.id, location_id])
-        row = cursor.fetchone()
-        if row:
-            cursor.execute("DELETE FROM guide_visitedlocation WHERE id = %s", [row[0]])
-            status_action = 'removed'
-        else:
-            cursor.execute("INSERT INTO guide_visitedlocation (user_id, location_id, visited_at) VALUES (%s, %s, NOW())", 
-                           [request.user.id, location_id])
-            status_action = 'added'
+    location = Location.objects.get(id=location_id)
+    visited, created = VisitedLocation.objects.get_or_create(user=request.user, location=location)
+    if not created:
+        visited.delete()
+        status_action = 'removed'
+    else:
+        status_action = 'added'
     return Response({'status': status_action})
 
 @api_view(['GET'])

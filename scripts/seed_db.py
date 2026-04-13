@@ -1,5 +1,8 @@
 import os, sys, django, datetime
 
+# Add project root to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'yugra_project.settings')
 sys.stdout.reconfigure(encoding='utf-8')
 django.setup()

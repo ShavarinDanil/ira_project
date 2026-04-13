@@ -11,8 +11,7 @@ urlpatterns = [
     path('profile/', api_views.profile, name='api_profile'),
     path('weather/', api_views.weather, name='api_weather'),
     path('location/<int:location_id>/', api_views.location_detail, name='api_location_detail'),
-    path('event/<int:event_id>/', api_views.event_detail, name='api_event_detail'),
-    path('toggle_favorite/<int:location_id>/', api_views.toggle_favorite, name='api_toggle_favorite'),
-    path('toggle_visited/<int:location_id>/', api_views.toggle_visited, name='api_toggle_visited'),
-    path('current_user/', api_views.current_user, name='api_current_user'),
+    path('location/<int:location_id>/favorite/', api_views.toggle_favorite, name='api_toggle_favorite'),
+    path('location/<int:location_id>/visited/', api_views.toggle_visited, name='api_toggle_visited'),
+    path('user/', api_views.current_user, name='api_current_user'),
 ]
