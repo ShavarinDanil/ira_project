@@ -224,8 +224,8 @@ export function setupContentSecurityPolicy(customScheme: string): void {
         ...details.responseHeaders,
         'Content-Security-Policy': [
           electronIsDev
-            ? `default-src ${customScheme}://* 'unsafe-inline' devtools://* 'unsafe-eval' data: https://ira-project-ep8l.onrender.com https://images.unsplash.com`
-            : `default-src ${customScheme}://* 'unsafe-inline' data: https://ira-project-ep8l.onrender.com https://images.unsplash.com`,
+            ? `default-src ${customScheme}://* 'unsafe-inline' devtools://* 'unsafe-eval' data: https://ira-project-ep8l.onrender.com https://images.unsplash.com https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://raw.githubusercontent.com https://*.basemaps.cartocdn.com https://router.project-osrm.org https://ski-ugra.ru`
+            : `default-src ${customScheme}://* 'unsafe-inline' data: https://ira-project-ep8l.onrender.com https://images.unsplash.com https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://raw.githubusercontent.com https://*.basemaps.cartocdn.com https://router.project-osrm.org https://ski-ugra.ru`,
         ],
       },
     });

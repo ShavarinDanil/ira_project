@@ -74,15 +74,24 @@ export default function MapRoute() {
         setGeoLoading(false);
       },
       (err) => {
-        const msgs = {
-          1: 'Доступ к геолокации запрещён. Разрешите доступ в браузере.',
-          2: 'Местоположение недоступно. Проверьте GPS.',
-          3: 'Время ожидания геолокации истекло.',
-        };
-        setGeoError(msgs[err.code] || 'Ошибка геолокации');
+        const isPC = window.navigator.userAgent.includes('Electron') || window.location.port !== '';
+        
+        if (isPC || err.code === 2 || err.code === 1) {
+          // Fallback to Khanty-Mansiysk for demo on PC
+          console.log("[GPS] Fallback to Khanty-Mansiysk center");
+          setUserPos([61.003, 69.017]);
+          setGeoError('GPS недоступен. Используем центр Ханты-Мансийска для демонстрации.');
+        } else {
+          const msgs = {
+            1: 'Доступ к геолокации запрещён.',
+            2: 'Местоположение недоступно.',
+            3: 'Время ожидания истекло.',
+          };
+          setGeoError(msgs[err.code] || 'Ошибка геолокации');
+        }
         setGeoLoading(false);
       },
-      { timeout: 12000, maximumAge: 30000, enableHighAccuracy: true }
+      { timeout: 10000, maximumAge: 60000, enableHighAccuracy: false }
     );
   }, []);
 
