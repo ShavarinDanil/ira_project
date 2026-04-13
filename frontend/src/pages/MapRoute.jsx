@@ -78,6 +78,13 @@ export default function MapRoute() {
   }, [mapInstance, userCoords, routingMode]);
 
   const buildRoute = (map, from, to, mode) => {
+    if (!window.ymaps.multiRouter) {
+      console.error("Yandex multiRouter module is not loaded!");
+      setGeoError("Ошибка: Модуль маршрутизации не загружен.");
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setRouteInfo(null);
     
