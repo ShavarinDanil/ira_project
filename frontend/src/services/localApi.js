@@ -9,9 +9,12 @@ import axios from 'axios';
 // Определяем базовый URL для APK и веб-версии
 const RENDER_URL = 'https://ira-project-ep8l.onrender.com';
 
-const API_BAR = (window.Capacitor || window.location.hostname !== 'localhost')
-    ? `${RENDER_URL}/api`
-    : 'http://localhost:8000/api';
+const API_BAR = (
+    window.location.port !== '5173' || 
+    window.location.hostname !== 'localhost' || 
+    (window.navigator.userAgent && window.navigator.userAgent.includes('Electron')) ||
+    window.Capacitor
+) ? `${RENDER_URL}/api` : 'http://localhost:8000/api';
 
 // Настройка axios для работы с Django (куки, заголовки)
 axios.defaults.withCredentials = true;
@@ -91,12 +94,12 @@ export const localApi = {
 
   // Действия (сохраняются в MySQL через сервер)
   toggleFavorite: async (id) => {
-    const res = await axios.post(`${API_BAR}/toggle_favorite/${id}/`);
+    const res = await axios.post(`${API_BAR}/location/${id}/favorite/`);
     return res.data;
   },
 
   toggleVisited: async (id) => {
-    const res = await axios.post(`${API_BAR}/toggle_visited/${id}/`);
+    const res = await axios.post(`${API_BAR}/location/${id}/visited/`);
     return res.data;
   },
 

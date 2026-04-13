@@ -126,6 +126,7 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
     'https://ira-project-ep8l.onrender.com',
     'capacitor://localhost',
+    'capacitor-electron://localhost',
     'http://localhost',
 ]
 
