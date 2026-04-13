@@ -118,6 +118,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'https://ira-project-ep8l.onrender.com',
+    'capacitor://localhost',
+    'capacitor-electron://localhost',
 ]
 CORS_ALLOW_ALL_ORIGINS = True # Для разработки и APK
 CORS_ALLOW_CREDENTIALS = True

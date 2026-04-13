@@ -15,6 +15,7 @@ const API_BAR = (
     (window.navigator.userAgent && window.navigator.userAgent.includes('Electron')) ||
     window.Capacitor
 ) ? `${RENDER_URL}/api` : 'http://localhost:8000/api';
+console.log("[API] Connecting to:", API_BAR);
 
 // Настройка axios для работы с Django (куки, заголовки)
 axios.defaults.withCredentials = true;
