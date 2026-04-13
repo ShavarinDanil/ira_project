@@ -111,13 +111,11 @@ def logout(request):
 @permission_classes([AllowAny])
 def feed(request):
     with connection.cursor() as cursor:
-        # Raw SQL выборка мест
         cursor.execute("SELECT * FROM guide_location ORDER BY rating DESC LIMIT 50")
         locations = dictfetchall(cursor)
         
-        # Raw SQL выборка событий с JOIN места
         cursor.execute("""
-            SELECT e.*, l.name as location_name 
+            SELECT e.*, l.name as location_name, l.latitude, l.longitude
             FROM guide_event e
             LEFT JOIN guide_location l ON e.location_id = l.id
             ORDER BY e.start_time ASC LIMIT 30
@@ -200,13 +198,11 @@ def location_detail(request, location_id):
             rating = request.data.get('rating')
             text = request.data.get('text')
             if rating and text:
-                # Raw SQL INSERT для отзыва
                 cursor.execute("""
                     INSERT INTO guide_review (user_id, location_id, rating, text, created_at)
                     VALUES (%s, %s, %s, %s, NOW())
                 """, [request.user.id, location_id, int(rating), text])
                 
-                # Raw SQL обновление рейтинга места
                 cursor.execute("SELECT AVG(rating) FROM guide_review WHERE location_id = %s", [location_id])
                 avg_rating = cursor.fetchone()[0]
                 new_rating = round(float(avg_rating), 1) if avg_rating else 0.0
@@ -225,6 +221,49 @@ def location_detail(request, location_id):
 
     return Response({
         'location': location,
+        'reviews': reviews,
+        'meta': get_meta(request.user)
+    })
+
+@api_view(['GET', 'POST'])
+@permission_classes([AllowAny])
+def event_detail(request, event_id):
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT e.*, l.name as location_name, l.latitude, l.longitude
+            FROM guide_event e
+            LEFT JOIN guide_location l ON e.location_id = l.id
+            WHERE e.id = %s
+        """, [event_id])
+        event_rows = dictfetchall(cursor)
+        if not event_rows:
+            return Response(status=404)
+        event = event_rows[0]
+            
+        if request.method == 'POST':
+            if not request.user.is_authenticated:
+                return Response({'error': 'Необходима авторизация'}, status=status.HTTP_401_UNAUTHORIZED)
+            rating = request.data.get('rating')
+            text = request.data.get('text')
+            if rating and text:
+                cursor.execute("""
+                    INSERT INTO guide_review (user_id, event_id, rating, text, created_at)
+                    VALUES (%s, %s, %s, %s, NOW())
+                """, [request.user.id, event_id, int(rating), text])
+                return Response({'status': 'ok'})
+                
+        # Выборка отзывов именно для этого события
+        cursor.execute("""
+            SELECT r.*, u.username as user_name
+            FROM guide_review r
+            JOIN guide_user u ON r.user_id = u.id
+            WHERE r.event_id = %s
+            ORDER BY r.created_at DESC
+        """, [event_id])
+        reviews = dictfetchall(cursor)
+
+    return Response({
+        'event': event,
         'reviews': reviews,
         'meta': get_meta(request.user)
     })

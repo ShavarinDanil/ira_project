@@ -95,5 +95,15 @@ export const localApi = {
       params: { city: cityIdx }
     });
     return res.data;
+  },
+
+  getEvent: async (id) => {
+    const res = await axios.get(`${API_BAR}/event/${id}/`);
+    return res.data;
+  },
+
+  addEventReview: async (eventId, rating, text) => {
+    const res = await axios.post(`${API_BAR}/event/${eventId}/`, { rating, text });
+    return res.data;
   }
 };

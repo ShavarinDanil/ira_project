@@ -95,10 +95,6 @@ export default function LocationDetail() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <span className="badge" style={{ marginBottom: 8 }}>{loc.category}</span>
-            <div className="rating">
-              <i className="fas fa-star"></i> {loc.rating}
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 400, marginLeft: 4 }}>({data.reviews.length} отзывов)</span>
-            </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className={`fav-btn ${isFav ? 'active' : ''}`} onClick={toggleFav} title="В избранное">
@@ -183,9 +179,9 @@ export default function LocationDetail() {
             <div className="review-card" key={review.id}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <div className="review-user">{review.user_name}</div>
-                <div className="rating" style={{ fontSize: 11 }}>
+                <div className="rating" style={{ display: 'flex', gap: 2 }}>
                   {[1, 2, 3, 4, 5].map(i => (
-                    <i key={i} className={`fa-star ${i <= review.rating ? 'fas' : 'far'}`}></i>
+                    <i key={i} className={`fa-star ${i <= review.rating ? 'fas' : 'far'}`} style={{ color: '#F39C12', fontSize: 13 }}></i>
                   ))}
                 </div>
               </div>

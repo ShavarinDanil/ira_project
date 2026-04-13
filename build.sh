@@ -15,3 +15,6 @@ python manage.py collectstatic --no-input
 
 # Миграции
 python manage.py migrate
+
+# Синхронизация данных (координаты, описания из db.json)
+python scripts/sync_data.py

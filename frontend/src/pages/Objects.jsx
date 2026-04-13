@@ -1,14 +1,22 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../App';
 import { NATURE_PICS } from '../constants';
+import { buildRoute } from '../utils/buildRoute';
 import { localApi } from '../services/localApi';
 
 export default function Objects() {
+  const navigate = useNavigate();
   const [data, setData] = useState({ locations: [], categories: [], meta: { fav_ids: [], visited_ids: [] } });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [routeGeoError, setRouteGeoError] = useState('');
+
+  const handleRoute = (lat, lon, name) => {
+    setRouteGeoError('');
+    buildRoute(lat, lon, name, (err) => setRouteGeoError(err), navigate);
+  };
 
   const fetchData = () => {
     setLoading(true);
@@ -80,15 +88,23 @@ export default function Objects() {
                 <div className="card-title"><Link to={`/location/${loc.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>{loc.name}</Link></div>
                 <div className="card-sub">{loc.description.substring(0, 100)}...</div>
                 <div className="card-meta">
-                  <div>
-                    <span className="badge">{loc.category || "Достопримечательность"}</span>
-                    <span className="rating" style={{ marginLeft: 8 }}><i className="fas fa-star"></i> {loc.rating}</span>
+                  <div className="card-meta-left">
+                    <span className="badge">{loc.category || "Место"}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button className={`fav-btn ${data.meta.fav_ids.includes(loc.id) ? 'active' : ''}`} onClick={(e) => toggleFav(loc.id, e)}>
+                    {loc.latitude && loc.longitude && (
+                      <button 
+                        className="route-btn-circle" 
+                        title="Построить маршрут"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRoute(loc.latitude, loc.longitude, loc.name); }}
+                      >
+                        <i className="fas fa-route"></i>
+                      </button>
+                    )}
+                    <button className={`fav-btn ${data.meta.fav_ids.includes(loc.id) ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFav(loc.id, e); }}>
                       <i className="fas fa-heart"></i>
                     </button>
-                    <button className={`visited-btn ${data.meta.visited_ids.includes(loc.id) ? 'active' : ''}`} onClick={(e) => toggleVisit(loc.id, e)}>
+                    <button className={`visited-btn ${data.meta.visited_ids.includes(loc.id) ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleVisit(loc.id, e); }}>
                       <i className="fas fa-check"></i>
                     </button>
                   </div>

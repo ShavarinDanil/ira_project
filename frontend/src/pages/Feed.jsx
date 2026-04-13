@@ -80,32 +80,38 @@ export default function Feed() {
         <div className="carousel-container">
           <div className="carousel-wrapper">
             <div className="carousel-inner" style={{ transform: `translateX(-${currentEventIndex * 256}px)` }}>
-              {data.events.map(event => (
-                <Link to={`/location/${event.location?.id}`} key={event.id} style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <div className="h-card">
-                    {event.photo_url ? (
-                      <img className="card-img" src={event.photo_url} alt={event.name} onError={(e) => { e.target.onerror = null; e.target.src = getAppropriateImage(event.name, event.id); }} />
-                    ) : <img className="card-img" src={getAppropriateImage(event.name, event.id)} alt={event.name} />}
-                    <div className="card-body">
-                      <div className="card-title">{event.name}</div>
-                      <div className="card-sub">{new Date(event.start_time).toLocaleDateString()}</div>
-                      {event.location && (
-                        <div className="card-sub" style={{ marginTop: 4 }}>
-                          <i className="fas fa-map-marker-alt" style={{ color: 'var(--green)', fontSize: 10 }}></i> {event.location.name}
+               {data.events.map(event => (
+                  <div className="h-card" key={event.id} style={{ display: 'flex', flexDirection: 'column' }}>
+                    <Link to={`/event/${event.id}`} style={{ display: 'flex', flexDirection: 'column', flex: 1, textDecoration: 'none', color: 'inherit' }}>
+                      {event.photo_url ? (
+                        <img className="card-img" src={event.photo_url} alt={event.name} onError={(e) => { e.target.onerror = null; e.target.src = getAppropriateImage(event.name, event.id); }} />
+                      ) : <img className="card-img" src={getAppropriateImage(event.name, event.id)} alt={event.name} />}
+                    <div className="card-body" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                        <div className="card-title">{event.name}</div>
+                        <div className="card-sub">{new Date(event.start_time).toLocaleDateString()}</div>
+                        {event.location && (
+                          <div className="card-sub" style={{ marginTop: 4 }}>
+                            <i className="fas fa-map-marker-alt" style={{ color: 'var(--green)', fontSize: 10 }}></i> {event.location.name}
+                          </div>
+                        )}
+                        <div className="card-meta">
+                          <div className="card-meta-left">
+                            <span className="badge">Событие</span>
+                          </div>
+                          {event.location?.latitude && event.location?.longitude && (
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRoute(event.location.latitude, event.location.longitude, event.name); }}
+                              className="route-btn-circle"
+                              title="Построить маршрут"
+                            >
+                              <i className="fas fa-route"></i>
+                            </button>
+                          )}
                         </div>
-                      )}
-                      {event.location?.latitude && event.location?.longitude && (
-                        <button
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRoute(event.location.latitude, event.location.longitude, event.name); }}
-                          style={{ marginTop: 8, background: '#0D4433', color: 'white', border: 'none', borderRadius: 10, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center' }}
-                        >
-                          <i className="fas fa-route"></i> Построить маршрут
-                        </button>
-                      )}
-                    </div>
+                      </div>
+                    </Link>
                   </div>
-                </Link>
-              ))}
+                ))}
             </div>
           </div>
           <div className="carousel-controls">
@@ -148,26 +154,25 @@ export default function Feed() {
               </div>
               <div className="card-sub">{loc.description.substring(0, 100)}...</div>
                 <div className="card-meta">
-                  <div>
-                    <span className="badge">{loc.category || "Достопримечательность"}</span>
-                    <span className="rating" style={{ marginLeft: 8 }}><i className="fas fa-star"></i> {loc.rating}</span>
+                  <div className="card-meta-left">
+                    <span className="badge">{loc.category || "Место"}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
+                    {loc.latitude && loc.longitude && (
+                      <button 
+                        className="route-btn-circle" 
+                        title="Построить маршрут"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRoute(loc.latitude, loc.longitude, loc.name); }}
+                      >
+                        <i className="fas fa-route"></i>
+                      </button>
+                    )}
                     <button className={`fav-btn ${data.meta.fav_ids.includes(loc.id) ? 'active' : ''}`} onClick={(e) => toggleFav(loc.id, e)}>
                       <i className="fas fa-heart"></i>
                     </button>
                     <button className={`visited-btn ${data.meta.visited_ids.includes(loc.id) ? 'active' : ''}`} onClick={(e) => toggleVisit(loc.id, e)}>
                       <i className="fas fa-check"></i>
                     </button>
-                    {loc.latitude && loc.longitude && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleRoute(loc.latitude, loc.longitude, loc.name); }}
-                        title="Построить маршрут"
-                        style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg, #0D4433, #1C3D5A)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 15 }}
-                      >
-                        <i className="fas fa-route"></i>
-                      </button>
-                    )}
                   </div>
                 </div>
             </div>

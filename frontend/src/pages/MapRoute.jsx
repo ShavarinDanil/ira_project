@@ -1,154 +1,186 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 
+
 export default function MapRoute() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
+  const isLoaded = useRef(false);
 
   const destLat = parseFloat(searchParams.get('lat'));
   const destLon = parseFloat(searchParams.get('lon'));
   const destName = searchParams.get('name') || 'Пункт назначения';
 
-  const [geoError, setGeoError] = useState('');
   const [routeInfo, setRouteInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Ждем загрузку скрипта яндекса
-    const initMap = () => {
+    let checkInterval = null;
+
+    const startInit = () => {
       const ymaps = window.ymaps;
-      if (!ymaps) {
-        setGeoError('Ошибка загрузки карт');
-        setLoading(false);
-        return;
-      }
+      if (!ymaps || isLoaded.current) return;
 
       ymaps.ready(() => {
-        // Создаем карту
-        const center = [destLat, destLon];
-        mapInstance.current = new ymaps.Map(mapRef.current, {
-          center: center,
-          zoom: 12,
-          controls: ['zoomControl', 'fullscreenControl']
-        });
+        if (isLoaded.current || !mapRef.current) return;
+        isLoaded.current = true;
 
-        // Пытаемся построить маршрут от текущего местоположения
-        ymaps.route(['Ханты-Мансийск', [destLat, destLon]], { // Дефолт или авто-определение
-          mapStateAutoApply: true,
-          routingMode: 'auto'
-        }).then(
-          (route) => {
-            // Если удалось найти геолокацию пользователя - подставим её вместо "Ханты-Мансийска"
-            ymaps.geolocation.get({
-              provider: 'browser',
-              mapStateAutoApply: true
-            }).then((result) => {
-              const userPos = result.geoObjects.position;
-              // Перестраиваем маршрут от реальной точки
-              ymaps.route([userPos, [destLat, destLon]], {
-                mapStateAutoApply: true,
-                routingMode: 'auto'
-              }).then((actualRoute) => {
-                mapInstance.current.geoObjects.add(actualRoute);
-                
-                // Получаем инфо о маршруте
-                const distance = actualRoute.getLength(); // в метрах
-                const time = actualRoute.getTime(); // в секундах
-                
-                setRouteInfo({
-                  distance: (distance / 1000).toFixed(1),
-                  duration: Math.round(time / 60)
-                });
+        // Физически очищаем контейнер перед созданием
+        mapRef.current.innerHTML = '';
+
+        try {
+          const destination = [destLat, destLon];
+          
+          // 1. Создаем карту
+          mapInstance.current = new ymaps.Map(mapRef.current, {
+            center: destination,
+            zoom: 12,
+            controls: ['zoomControl', 'fullscreenControl']
+          });
+
+          // 2. Сразу запрашиваем позицию для маршрута
+          ymaps.geolocation.get({
+            provider: 'browser',
+            mapStateAutoApply: false
+          }).then((result) => {
+            const userPos = result.geoObjects.position;
+            
+            // Маркер игрока
+            mapInstance.current.geoObjects.add(new ymaps.Placemark(userPos, {
+              iconCaption: 'Вы здесь'
+            }, {
+              preset: 'islands#blueCircleDotIconWithCaption'
+            }));
+
+            buildPath(userPos, destination);
+          }).catch(() => {
+            // Фолбек: маршрут от центра ХМ
+            buildPath([61.003, 69.017], destination);
+          });
+
+          function buildPath(start, end) {
+            ymaps.route([start, end], {
+              mapStateAutoApply: true,
+              routingMode: 'auto'
+            }).then(
+              (route) => {
+                if (mapInstance.current) {
+                  mapInstance.current.geoObjects.add(route);
+                  
+                  const distance = route.getLength();
+                  const time = route.getTime();
+                  
+                  setRouteInfo({
+                    distance: (distance / 1000).toFixed(1),
+                    duration: Math.round(time / 60)
+                  });
+                }
                 setLoading(false);
-              });
-            }).catch(() => {
-              // Если геолокация не сработала - оставляем маркер назначения
-              const destPlacemark = new ymaps.Placemark([destLat, destLon], {
-                balloonContent: destName
-              }, { preset: 'islands#redDotIcon' });
-              mapInstance.current.geoObjects.add(destPlacemark);
-              setLoading(false);
-            });
-          },
-          (err) => {
-            console.error(err);
-            setGeoError('Не удалось построить маршрут');
-            setLoading(false);
+              },
+              (err) => {
+                console.error("Route error:", err);
+                // Если маршрут не строится - ставим хотя бы метку цели
+                mapInstance.current.geoObjects.add(new ymaps.Placemark(end, {
+                  balloonContent: destName
+                }, { preset: 'islands#redDotIcon' }));
+                setError('Не удалось рассчитать маршрут. Проверьте дороги.');
+                setLoading(false);
+              }
+            );
           }
-        );
+        } catch (e) {
+          console.error("Map init critical error:", e);
+          setError('Ошибка при инициализации карты');
+          setLoading(false);
+        }
       });
     };
 
     if (window.ymaps) {
-      initMap();
+      startInit();
     } else {
-      setTimeout(initMap, 1000);
+      checkInterval = setInterval(() => {
+        if (window.ymaps) {
+          clearInterval(checkInterval);
+          startInit();
+        }
+      }, 500);
     }
 
     return () => {
+      if (checkInterval) clearInterval(checkInterval);
       if (mapInstance.current) {
         mapInstance.current.destroy();
+        mapInstance.current = null;
       }
+      isLoaded.current = false;
     };
-  }, [destLat, destLon, destName]);
+  }, [destLat, destLon]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f8f9fa' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f4f7f6', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{
-        background: 'linear-gradient(135deg, #0D4433 0%, #1C3D5A 100%)',
+        background: 'linear-gradient(135deg, #0D4433 0%, #17382E 100%)',
         color: 'white',
         padding: '16px 20px',
         display: 'flex',
         alignItems: 'center',
-        gap: 12,
-        zIndex: 1000,
-        boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+        gap: 15,
+        zIndex: 100,
+        boxShadow: '0 4px 15px rgba(0,0,0,0.15)'
       }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: 10, width: 38, height: 38, cursor: 'pointer', fontSize: 16 }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', borderRadius: 12, width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
           <i className="fas fa-arrow-left"></i>
         </button>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 800, fontSize: 16 }}>🗺️ Маршрут в Югре</div>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>До объекта: {destName}</div>
+          <div style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-0.3px' }}>🧭 Маршрут Югры</div>
+          <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 500 }}>{destName}</div>
         </div>
       </div>
 
-      {/* Info Bar */}
+      {/* Stats Bar */}
       {routeInfo && (
-        <div style={{ background: 'white', padding: '12px 20px', display: 'flex', gap: 20, justifyContent: 'center', borderBottom: '1px solid #eee' }}>
+        <div style={{ background: 'white', padding: '12px 24px', display: 'flex', gap: 30, justifyContent: 'center', borderBottom: '1px solid #edf2f0', zIndex: 10 }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ color: '#1C3D5A', fontSize: 18, fontWeight: 800 }}>{routeInfo.distance} км</div>
-            <div style={{ color: '#888', fontSize: 10 }}>дистанция</div>
+            <div style={{ color: '#17382E', fontSize: 20, fontWeight: 900 }}>{routeInfo.distance} <small style={{ fontSize: 12 }}>км</small></div>
+            <div style={{ color: '#94a3b8', fontSize: 10, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>расстояние</div>
           </div>
-          <div style={{ width: 1, background: '#eee' }}></div>
+          <div style={{ width: 1, height: 30, background: '#f1f5f9', alignSelf: 'center' }}></div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ color: '#0D4433', fontSize: 18, fontWeight: 800 }}>~{routeInfo.duration} мин</div>
-            <div style={{ color: '#888', fontSize: 10 }}>на авто</div>
+            <div style={{ color: '#22c55e', fontSize: 20, fontWeight: 900 }}>~{routeInfo.duration} <small style={{ fontSize: 12 }}>мин</small></div>
+            <div style={{ color: '#94a3b8', fontSize: 10, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>в пути</div>
           </div>
         </div>
       )}
 
-      {/* Map Container */}
-      <div ref={mapRef} style={{ flex: 1, width: '100%', position: 'relative' }}>
-         {loading && (
-           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'white', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-              <i className="fas fa-spinner fa-spin" style={{ fontSize: 40, color: '#0D4433' }}></i>
-              <div style={{ fontWeight: 600 }}>Загружаем Яндекс.Карты...</div>
-           </div>
-         )}
-         {geoError && (
-            <div style={{ position: 'absolute', top: 20, left: 20, right: 20, zIndex: 10, background: '#FDEDEC', padding: 12, borderRadius: 12, color: '#E74C3C', fontWeight: 600 }}>
-               <i className="fas fa-exclamation-triangle"></i> {geoError}
-            </div>
-         )}
-      </div>
+      {/* Map Element */}
+      <div 
+        ref={mapRef} 
+        style={{ 
+          flex: 1, 
+          width: '100%', 
+          position: 'relative', 
+          background: '#f1f5f9', 
+          minHeight: '400px' // Гарантируем высоту
+        }} 
+      >
+        {loading && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 15 }}>
+            <i className="fas fa-compass fa-spin" style={{ fontSize: 44, color: '#0D4433' }}></i>
+            <div style={{ fontWeight: 700, color: '#1a3a3a', fontSize: 16 }}>Прокладываем маршрут...</div>
+          </div>
+        )}
 
-      <style>{`
-        .ymaps-2-1-79-map { border-radius: 0 !important; }
-      `}</style>
+        {error && !routeInfo && (
+          <div style={{ position: 'absolute', bottom: 40, left: 20, right: 20, zIndex: 60, background: '#fee2e2', border: '1px solid #ef4444', padding: '14px', borderRadius: 16, color: '#b91c1c', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}>
+            <i className="fas fa-exclamation-circle" style={{ fontSize: 20 }}></i> {error}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

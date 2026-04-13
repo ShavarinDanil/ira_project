@@ -11,6 +11,7 @@ import Weather from './pages/Weather';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import MapRoute from './pages/MapRoute';
+import EventDetail from './pages/EventDetail';
 
 function BottomNav() {
   const loc = useLocation();
@@ -63,6 +64,7 @@ function App() {
             <Route path="/" element={user ? <Feed /> : <Login />} />
             <Route path="/objects" element={user ? <Objects /> : <Login />} />
             <Route path="/location/:id" element={user ? <LocationDetail /> : <Login />} />
+            <Route path="/event/:id" element={user ? <EventDetail /> : <Login />} />
             <Route path="/routes" element={user ? <RoutesPage /> : <Login />} />
             <Route path="/weather" element={user ? <Weather /> : <Login />} />
             <Route path="/profile" element={user ? <Profile /> : <Login />} />

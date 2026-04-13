@@ -9,7 +9,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
 def setup_mysql(python_exe):
-    print(f"[{time.strftime('%H:%M:%S')}] Проверка и настройка MySQL...")
+    print(f"[{time.strftime('%H:%M:%S')}] Проверка базы данных MySQL...")
     try:
         # 1. Создание БД если нет
         import MySQLdb
@@ -20,17 +20,9 @@ def setup_mysql(python_exe):
         
         # 2. Применение миграций Django
         subprocess.run([python_exe, "manage.py", "migrate"], check=True)
-        
-        # 3. Перенос данных из SQLite если файл существует
-        if os.path.exists("db.sqlite3"):
-            print(f"[{time.strftime('%H:%M:%S')}] Обнаружен старый файл sqlite3. Перенос данных...")
-            subprocess.run([python_exe, "migrate_to_mysql.py"], check=True)
-            # Переименовываем, чтобы не переносить каждый раз
-            os.rename("db.sqlite3", "db.sqlite3.backup")
-            print(f"[{time.strftime('%H:%M:%S')}] Перенос завершен. SQLite файл переименован в .backup")
             
     except Exception as e:
-        print(f"Ошибка при настройке MySQL: {e}")
+        print(f"Ошибка при настройке базы данных: {e}")
         print("Убедитесь, что сервер MySQL запущен и пароль '349151210' верен.")
 
 def main():
