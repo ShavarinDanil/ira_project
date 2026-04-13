@@ -67,20 +67,22 @@ export default function MapRoute() {
   }, [destLat, destLon]);
 
   const buildRoute = (map, from, to) => {
+    console.log("Building route from:", from, "to:", to);
+    
     const multiRoute = new window.ymaps.multiRouter.MultiRoute({
       referencePoints: [from, to],
       params: {
-        routingMode: 'auto' // По умолчанию на машине
+        routingMode: 'driving' // Явно указываем на машине для надежности
       }
     }, {
-      // Внешний вид линии маршрута
       routeActiveStrokeWidth: 6,
       routeActiveStrokeColor: "#0D4433",
       boundsAutoApply: true
     });
 
-    // Подписка на событие готовности маршрута для получения статистики
+    // Успешное построение
     multiRoute.model.events.add('requestsuccess', () => {
+      console.log("Route request success");
       const activeRoute = multiRoute.getActiveRoute();
       if (activeRoute) {
         setRouteInfo({
@@ -88,6 +90,13 @@ export default function MapRoute() {
           duration: activeRoute.properties.get("duration").text
         });
       }
+      setLoading(false);
+    });
+
+    // Ошибка построения (например, нет дорог)
+    multiRoute.model.events.add('requestfail', (event) => {
+      console.error("Route request failed:", event.get('error'));
+      setGeoError("Не удалось проложить маршрут между этими точками.");
       setLoading(false);
     });
 
