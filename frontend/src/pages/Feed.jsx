@@ -81,35 +81,42 @@ export default function Feed() {
           <div className="carousel-wrapper">
             <div className="carousel-inner" style={{ transform: `translateX(-${currentEventIndex * 256}px)` }}>
                {data.events.map(event => (
-                  <div className="h-card" key={event.id} style={{ display: 'flex', flexDirection: 'column' }}>
-                    <Link to={`/event/${event.id}`} style={{ display: 'flex', flexDirection: 'column', flex: 1, textDecoration: 'none', color: 'inherit' }}>
+                  <div className="h-card" key={event.id}>
+                    {/* Top part is clickable link to detail */}
+                    <Link to={`/event/${event.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column' }}>
                       {event.photo_url ? (
                         <img className="card-img" src={event.photo_url} alt={event.name} onError={(e) => { e.target.onerror = null; e.target.src = getAppropriateImage(event.name, event.id); }} />
                       ) : <img className="card-img" src={getAppropriateImage(event.name, event.id)} alt={event.name} />}
-                    <div className="card-body" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                      
+                      <div className="card-body" style={{ paddingBottom: 0 }}>
                         <div className="card-title">{event.name}</div>
                         <div className="card-sub">{new Date(event.start_time).toLocaleDateString()}</div>
                         {event.location && (
-                          <div className="card-sub" style={{ marginTop: 4 }}>
-                            <i className="fas fa-map-marker-alt" style={{ color: 'var(--green)', fontSize: 10 }}></i> {event.location.name}
+                          <div className="card-sub" style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <i className="fas fa-map-marker-alt" style={{ color: 'var(--green)', fontSize: 10 }}></i> 
+                            <span style={{ fontSize: 12 }}>{event.location.name}</span>
                           </div>
                         )}
-                        <div className="card-meta">
-                          <div className="card-meta-left">
-                            <span className="badge">Событие</span>
-                          </div>
-                          {event.location?.latitude && event.location?.longitude && (
-                            <button
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRoute(event.location.latitude, event.location.longitude, event.name); }}
-                              className="route-btn-circle"
-                              title="Построить маршрут"
-                            >
-                              <i className="fas fa-route"></i>
-                            </button>
-                          )}
-                        </div>
                       </div>
                     </Link>
+
+                    {/* Bottom part with action buttons is NOT inside the Link */}
+                    <div className="card-body" style={{ paddingTop: 0, marginTop: 'auto' }}>
+                      <div className="card-meta">
+                        <div className="card-meta-left">
+                          <span className="badge">Событие</span>
+                        </div>
+                        {event.location?.latitude && event.location?.longitude && (
+                          <button
+                            onClick={() => handleRoute(event.location.latitude, event.location.longitude, event.name)}
+                            className="route-btn-circle"
+                            title="Построить маршрут"
+                          >
+                            <i className="fas fa-route"></i>
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
             </div>

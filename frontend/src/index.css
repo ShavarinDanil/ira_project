@@ -453,7 +453,7 @@ body {
   transition: 0.3s;
   display: flex;
   flex-direction: column;
-  height: 290px; /* Reduced by 15% as requested */
+  height: 340px; /* Increased to avoid button clipping */
 }
 
 .h-card .card-img {
