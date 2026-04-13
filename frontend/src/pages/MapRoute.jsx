@@ -1,51 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 
-// Fix Leaflet default marker icon bug in Vite/Webpack
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
-
-// Custom icons
-const userIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41],
-});
-
-const destIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41],
-});
-
-// Auto-fit map to show both markers
-function FitBounds({ from, to }) {
-  const map = useMap();
-  useEffect(() => {
-    if (from && to) {
-      map.fitBounds([from, to], { padding: [60, 60] });
-    }
-  }, [from, to, map]);
-  return null;
-}
-
-// Haversine distance in km
-function haversine(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
+/**
+ * Страница построения маршрута с использованием Яндекс Карт.
+ * Заменяет Leaflet на Yandex Maps JS API v2.1.
+ */
 export default function MapRoute() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -54,95 +13,99 @@ export default function MapRoute() {
   const destLon = parseFloat(searchParams.get('lon'));
   const destName = searchParams.get('name') || 'Пункт назначения';
 
-  const [userPos, setUserPos] = useState(null);
+  const mapRef = useRef(null);
+  const [mapInstance, setMapInstance] = useState(null);
+  const [routeInfo, setRouteInfo] = useState(null);
   const [geoError, setGeoError] = useState('');
-  const [routeCoords, setRouteCoords] = useState(null); // array of [lat, lon]
-  const [routeInfo, setRouteInfo] = useState(null);     // { distance, duration }
-  const [routeLoading, setRouteLoading] = useState(false);
-  const [geoLoading, setGeoLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
-  // Step 1: get user geolocation
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setGeoError('Ваш браузер не поддерживает геолокацию');
-      setGeoLoading(false);
+    if (!window.ymaps) {
+      setGeoError('Ошибка: Яндекс Карты не загружены. Проверьте подключение.');
+      setLoading(false);
       return;
     }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserPos([pos.coords.latitude, pos.coords.longitude]);
-        setGeoLoading(false);
-      },
-      (err) => {
-        const msgs = {
-          1: 'Доступ к геолокации запрещён. Разрешите доступ в браузере.',
-          2: 'Местоположение недоступно. Проверьте GPS.',
-          3: 'Время ожидания геолокации истекло.',
-        };
-        setGeoError(msgs[err.code] || 'Ошибка геолокации');
-        setGeoLoading(false);
-      },
-      { timeout: 12000, maximumAge: 30000, enableHighAccuracy: true }
-    );
-  }, []);
 
-  // Step 2: fetch route from OSRM when we have user position
-  useEffect(() => {
-    if (!userPos || !destLat || !destLon) return;
+    window.ymaps.ready(() => {
+      // Инициализация карты
+      const map = new window.ymaps.Map(mapRef.current, {
+        center: [destLat || 61.003, destLon || 69.018], // Дефолт на ХМ
+        zoom: 12,
+        controls: ['zoomControl', 'fullscreenControl', 'typeSelector']
+      }, {
+        suppressMapOpenBlock: true // Убираем лишние кнопки Яндекса снизу
+      });
 
-    const [fromLat, fromLon] = userPos;
-    setRouteLoading(true);
+      setMapInstance(map);
 
-    // OSRM public demo server (driving route)
-    const osrmUrl =
-      `https://router.project-osrm.org/route/v1/driving/` +
-      `${fromLon},${fromLat};${destLon},${destLat}` +
-      `?overview=full&geometries=geojson&steps=false`;
+      // Получаем геопозицию пользователя
+      window.navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const userCoords = [pos.coords.latitude, pos.coords.longitude];
+          buildRoute(map, userCoords, [destLat, destLon]);
+        },
+        (err) => {
+          setGeoError('Геолокация недоступна. Показываем только точку назначения.');
+          // Если нет геопозиции, просто ставим маркер цели
+          map.geoObjects.add(new window.ymaps.Placemark([destLat, destLon], {
+            balloonContent: destName
+          }, {
+            preset: 'islands#redDotIconWithCaption',
+            caption: destName
+          }));
+          setLoading(false);
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    });
 
-    fetch(osrmUrl)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.code === 'Ok' && data.routes.length > 0) {
-          const route = data.routes[0];
-          // GeoJSON coords are [lon, lat], Leaflet needs [lat, lon]
-          const coords = route.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
-          setRouteCoords(coords);
-          setRouteInfo({
-            distance: (route.distance / 1000).toFixed(1),   // km
-            duration: Math.round(route.duration / 60),       // minutes
-          });
-        } else {
-          // Fallback: straight line
-          setRouteCoords([userPos, [destLat, destLon]]);
-          const d = haversine(fromLat, fromLon, destLat, destLon);
-          setRouteInfo({ distance: d.toFixed(1), duration: Math.round(d * 2) });
-        }
-      })
-      .catch(() => {
-        // If OSRM fails — draw straight line
-        setRouteCoords([userPos, [destLat, destLon]]);
-        const d = haversine(fromLat, fromLon, destLat, destLon);
-        setRouteInfo({ distance: d.toFixed(1), duration: Math.round(d * 2) });
-      })
-      .finally(() => setRouteLoading(false));
-  }, [userPos, destLat, destLon]);
+    return () => {
+      if (mapInstance) {
+        mapInstance.destroy();
+      }
+    };
+  }, [destLat, destLon]);
+
+  const buildRoute = (map, from, to) => {
+    const multiRoute = new window.ymaps.multiRouter.MultiRoute({
+      referencePoints: [from, to],
+      params: {
+        routingMode: 'auto' // По умолчанию на машине
+      }
+    }, {
+      // Внешний вид линии маршрута
+      routeActiveStrokeWidth: 6,
+      routeActiveStrokeColor: "#0D4433",
+      boundsAutoApply: true
+    });
+
+    // Подписка на событие готовности маршрута для получения статистики
+    multiRoute.model.events.add('requestsuccess', () => {
+      const activeRoute = multiRoute.getActiveRoute();
+      if (activeRoute) {
+        setRouteInfo({
+          distance: activeRoute.properties.get("distance").text,
+          duration: activeRoute.properties.get("duration").text
+        });
+      }
+      setLoading(false);
+    });
+
+    map.geoObjects.add(multiRoute);
+  };
 
   if (!destLat || !destLon) {
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
         <div style={{ fontSize: 48 }}>🗺️</div>
         <p>Некорректные координаты маршрута.</p>
-        <button onClick={() => navigate(-1)} style={{ marginTop: 16, padding: '10px 24px', borderRadius: 12, border: 'none', background: '#0D4433', color: 'white', cursor: 'pointer' }}>
-          ← Назад
-        </button>
+        <button onClick={() => navigate(-1)} className="btn-primary" style={{ marginTop: 16 }}>← Назад</button>
       </div>
     );
   }
 
-  const center = userPos || [destLat, destLon];
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', position: 'relative' }}>
       {/* Header */}
       <div style={{
         background: 'linear-gradient(135deg, #0D4433 0%, #1C3D5A 100%)',
@@ -163,115 +126,60 @@ export default function MapRoute() {
         </button>
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <div style={{ fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            🗺️ Маршрут до «{destName}»
+             Яндекс.Маршрут до «{destName}»
           </div>
           <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
-            {geoLoading ? 'Определяем ваше местоположение...'
-              : geoError ? '⚠ ' + geoError
-              : routeLoading ? 'Строим маршрут...'
-              : routeInfo ? `📏 ${routeInfo.distance} км · ⏱ ~${routeInfo.duration} мин`
-              : ''}
+            {loading ? 'Загрузка маршрута...' : geoError ? geoError : `Путь: ${routeInfo?.distance || ''} · ${routeInfo?.duration || ''}`}
           </div>
         </div>
       </div>
 
-      {/* Route info bar */}
-      {routeInfo && !routeLoading && (
+      {/* Info Overlay */}
+      {routeInfo && (
         <div style={{
-          background: 'white',
-          padding: '10px 20px',
+          position: 'absolute',
+          bottom: 24,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(255,255,255,0.95)',
+          padding: '12px 24px',
+          borderRadius: 40,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          zIndex: 1000,
           display: 'flex',
           gap: 20,
-          justifyContent: 'center',
-          borderBottom: '1px solid #eee',
-          flexShrink: 0,
-          flexWrap: 'wrap',
+          alignItems: 'center',
+          backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(13,68,51,0.1)'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700 }}>
-            <span style={{ fontSize: 20 }}>📏</span>
-            <div><div style={{ color: '#1C3D5A', fontSize: 18 }}>{routeInfo.distance} км</div><div style={{ color: '#888', fontSize: 11, fontWeight: 400 }}>расстояние</div></div>
-          </div>
-          <div style={{ width: 1, background: '#eee' }}></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700 }}>
-            <span style={{ fontSize: 20 }}>⏱</span>
-            <div><div style={{ color: '#0D4433', fontSize: 18 }}>~{routeInfo.duration} мин</div><div style={{ color: '#888', fontSize: 11, fontWeight: 400 }}>на машине</div></div>
-          </div>
-          <div style={{ width: 1, background: '#eee' }}></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700 }}>
-            <span style={{ fontSize: 20 }}>🚶</span>
-            <div><div style={{ color: '#E67E22', fontSize: 18 }}>~{Math.round(routeInfo.distance * 12)} мин</div><div style={{ color: '#888', fontSize: 11, fontWeight: 400 }}>пешком</div></div>
-          </div>
+           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+             <i className="fas fa-car" style={{ color: '#0D4433' }}></i>
+             <span style={{ fontWeight: 800, color: '#1C2833' }}>{routeInfo.duration}</span>
+           </div>
+           <div style={{ width: 1, height: 20, background: '#ddd' }}></div>
+           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+             <i className="fas fa-road" style={{ color: '#5D6D7E' }}></i>
+             <span style={{ fontWeight: 600, color: '#5D6D7E' }}>{routeInfo.distance}</span>
+           </div>
         </div>
       )}
 
-      {/* Loading overlay */}
-      {(geoLoading || routeLoading) && (
+      {/* Map Container */}
+      <div ref={mapRef} style={{ flex: 1, width: '100%' }}></div>
+
+      {loading && (
         <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(255,255,255,0.85)', zIndex: 999,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+          position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 2000
         }}>
-          <div style={{ fontSize: 48 }}>🗺️</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#0D4433' }}>
-            {geoLoading ? 'Определяем местоположение...' : 'Строим маршрут...'}
-          </div>
-          <div style={{ width: 40, height: 40, border: '4px solid #0D4433', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>🗺️</div>
+          <div style={{ fontWeight: 700, color: '#0D4433' }}>Строим оптимальный путь...</div>
         </div>
       )}
-
-      {/* Error state */}
-      {geoError && !geoLoading && (
-        <div style={{ padding: 20 }}>
-          <div style={{ background: '#FDEDEC', borderRadius: 12, padding: 16, color: '#E74C3C', fontWeight: 600 }}>
-            <i className="fas fa-exclamation-triangle"></i> {geoError}
-            <p style={{ marginTop: 8, fontWeight: 400, fontSize: 13 }}>
-              Карта будет показана с центром в пункте назначения.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Map */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        <MapContainer
-          center={center}
-          zoom={12}
-          style={{ width: '100%', height: '100%' }}
-          zoomControl={true}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-
-          {/* Destination marker */}
-          <Marker position={[destLat, destLon]} icon={destIcon}>
-            <Popup><strong>{destName}</strong><br/>Пункт назначения</Popup>
-          </Marker>
-
-          {/* User marker */}
-          {userPos && (
-            <Marker position={userPos} icon={userIcon}>
-              <Popup>📍 Вы здесь</Popup>
-            </Marker>
-          )}
-
-          {/* Route polyline */}
-          {routeCoords && (
-            <Polyline
-              positions={routeCoords}
-              pathOptions={{ color: '#0D4433', weight: 5, opacity: 0.85, dashArray: null }}
-            />
-          )}
-
-          {/* Auto-fit bounds */}
-          {userPos && <FitBounds from={userPos} to={[destLat, destLon]} />}
-        </MapContainer>
-      </div>
 
       <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .leaflet-container { font-family: 'Outfit', sans-serif; }
+        .ymaps-2-1-79-map { border-radius: 0; }
+        .ymaps-2-1-79-copyrights-promo { display: none !important; }
       `}</style>
     </div>
   );
