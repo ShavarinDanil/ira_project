@@ -15,11 +15,17 @@ export default function Login() {
     try {
       const userData = await localApi.login(username, password);
       setUser(userData);
-      navigate('/');
+      
+      const searchParams = new URLSearchParams(window.location.search);
+      const nextUrl = searchParams.get('next') || '/';
+      navigate(nextUrl, { replace: true });
     } catch (err) {
       setError(err.message || 'Ошибка входа');
     }
   };
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const nextQs = searchParams.get('next') ? `?next=${encodeURIComponent(searchParams.get('next'))}` : '';
 
   return (
     <div className="auth-page">
@@ -37,7 +43,7 @@ export default function Login() {
           <input className="form-input" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
         </div>
         <button type="submit" className="btn-primary">Войти</button>
-        <Link to="/register" className="auth-link">Нет аккаунта? Зарегистрируйтесь</Link>
+        <Link to={`/register${nextQs}`} className="auth-link">Нет аккаунта? Зарегистрируйтесь</Link>
       </form>
     </div>
   );

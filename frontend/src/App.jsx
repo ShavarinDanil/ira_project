@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useContext } from 'react';
+import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { localApi } from './services/localApi';
 
 import Feed from './pages/Feed';
@@ -38,12 +38,26 @@ function BottomNav() {
 
 export const AuthContext = React.createContext(null);
 
+function ProtectedRoute({ children }) {
+  const { user } = useContext(AuthContext);
+  const location = useLocation();
+  
+  if (!user) {
+    return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+  }
+  return children;
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const startLogout = async () => {
+    await localApi.logout();
+    setUser(null);
+  };
+
   useEffect(() => {
-    // Используем локальные данные вместо API
     localApi.getCurrentUser()
       .then(u => {
         if (u) setUser(u);
@@ -55,20 +69,20 @@ function App() {
   if (loading) return <div>Загрузка...</div>;
 
   return (
-    <AuthContext.Provider value={{ user, setUser }}>
+    <AuthContext.Provider value={{ user, setUser, startLogout }}>
       <BrowserRouter>
         <div className={`page-content ${user ? 'with-nav' : ''}`}>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/" element={user ? <Feed /> : <Login />} />
-            <Route path="/objects" element={user ? <Objects /> : <Login />} />
-            <Route path="/location/:id" element={user ? <LocationDetail /> : <Login />} />
-            <Route path="/event/:id" element={user ? <EventDetail /> : <Login />} />
-            <Route path="/routes" element={user ? <RoutesPage /> : <Login />} />
-            <Route path="/weather" element={user ? <Weather /> : <Login />} />
-            <Route path="/profile" element={user ? <Profile /> : <Login />} />
-            <Route path="/route" element={user ? <MapRoute /> : <Login />} />
+            <Route path="/" element={<ProtectedRoute><Feed /></ProtectedRoute>} />
+            <Route path="/objects" element={<ProtectedRoute><Objects /></ProtectedRoute>} />
+            <Route path="/location/:id" element={<ProtectedRoute><LocationDetail /></ProtectedRoute>} />
+            <Route path="/event/:id" element={<ProtectedRoute><EventDetail /></ProtectedRoute>} />
+            <Route path="/routes" element={<ProtectedRoute><RoutesPage /></ProtectedRoute>} />
+            <Route path="/weather" element={<ProtectedRoute><Weather /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/route" element={<ProtectedRoute><MapRoute /></ProtectedRoute>} />
           </Routes>
         </div>
         {user && <BottomNav />}

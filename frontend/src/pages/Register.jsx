@@ -14,11 +14,17 @@ export default function Register() {
     try {
       const userData = await localApi.register(formData);
       setUser(userData);
-      navigate('/');
+
+      const searchParams = new URLSearchParams(window.location.search);
+      const nextUrl = searchParams.get('next') || '/';
+      navigate(nextUrl, { replace: true });
     } catch (err) {
       setError(err.message || 'Ошибка регистрации');
     }
   };
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const nextQs = searchParams.get('next') ? `?next=${encodeURIComponent(searchParams.get('next'))}` : '';
 
   return (
     <div className="auth-page">
@@ -47,7 +53,7 @@ export default function Register() {
           <input className="form-input" onChange={e => setFormData({...formData, last_name: e.target.value})} />
         </div>
         <button type="submit" className="btn-primary">Зарегистрироваться</button>
-        <Link to="/login" className="auth-link">Уже есть аккаунт? Войти</Link>
+        <Link to={`/login${nextQs}`} className="auth-link">Уже есть аккаунт? Войти</Link>
       </form>
     </div>
   );

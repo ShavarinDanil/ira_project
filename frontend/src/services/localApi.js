@@ -16,6 +16,15 @@ const API_BAR = (window.Capacitor || window.location.hostname !== 'localhost')
 // Настройка axios для работы с Django (куки, заголовки)
 axios.defaults.withCredentials = true;
 
+// Подключаем токен аутентификации если он есть
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('yugra_auth_token');
+  if (token) {
+    config.headers.Authorization = `Token ${token}`;
+  }
+  return config;
+});
+
 const STORAGE_KEYS = {
   USER: 'yugra_user'
 };
@@ -38,12 +47,23 @@ export const localApi = {
 
   login: async (username, password) => {
     const res = await axios.post(`${API_BAR}/login/`, { username, password });
-    return res.data;
+    if (res.data.token) {
+      localStorage.setItem('yugra_auth_token', res.data.token);
+    }
+    return res.data.user;
   },
 
   register: async (data) => {
     const res = await axios.post(`${API_BAR}/register/`, data);
-    return res.data;
+    if (res.data.token) {
+      localStorage.setItem('yugra_auth_token', res.data.token);
+    }
+    return res.data.user;
+  },
+
+  logout: async () => {
+    localStorage.removeItem('yugra_auth_token');
+    await axios.post(`${API_BAR}/logout/`);
   },
 
   // Данные (через сервер)
