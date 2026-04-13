@@ -206,6 +206,7 @@ def profile(request):
         'visited_count': visited_count,
     })
 
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def toggle_favorite(request, location_id):
@@ -217,6 +218,7 @@ def toggle_favorite(request, location_id):
         status_action = 'added'
     return Response({'status': status_action})
 
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def toggle_visited(request, location_id):
