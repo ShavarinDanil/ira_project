@@ -1,7 +1,7 @@
 import requests
 from django.db.models import Avg
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -26,22 +26,33 @@ KMAO_CITIES = [
 def get_weather_data(city_index=0):
     city = KMAO_CITIES[city_index % len(KMAO_CITIES)]
     try:
+        # Use current parameters instead of legacy current_weather
         url = (
             f"https://api.open-meteo.com/v1/forecast"
             f"?latitude={city['lat']}&longitude={city['lon']}"
-            f"&current_weather=true"
+            f"&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,surface_pressure"
         )
-        # Reduced timeout to 1.5s to prevent UI hangs
-        r = requests.get(url, timeout=1.5)
-        cw = r.json().get('current_weather', {})
+        # Increased timeout to 3s
+        r = requests.get(url, timeout=3.0)
+        data = r.json()
+        current = data.get('current', {})
+        
         return {
-            'temperature': cw.get('temperature', 0),
-            'windspeed': cw.get('windspeed', 0),
+            'temperature': current.get('temperature_2m', 0),
+            'humidity': current.get('relative_humidity_2m', 0),
+            'apparent_temp': current.get('apparent_temperature', 0),
+            'windspeed': current.get('wind_speed_10m', 0),
+            'pressure': round(current.get('surface_pressure', 0) * 0.750062, 1), # Convert hPa to mmHg
             'city': city['name'],
             'all_cities': [c['name'] for c in KMAO_CITIES],
         }
-    except Exception:
-        return {'temperature': 0, 'windspeed': 0, 'city': city['name'], 'all_cities': [c['name'] for c in KMAO_CITIES]}
+    except Exception as e:
+        print(f"Weather error: {e}")
+        return {
+            'temperature': 0, 'humidity': 0, 'apparent_temp': 0, 
+            'windspeed': 0, 'pressure': 0, 
+            'city': city['name'], 'all_cities': [c['name'] for c in KMAO_CITIES]
+        }
 
 def get_meta(user):
     fav_ids = set()
@@ -51,6 +62,7 @@ def get_meta(user):
         visited_ids = set(VisitedLocation.objects.filter(user=user).values_list('location_id', flat=True))
     return {'fav_ids': list(fav_ids), 'visited_ids': list(visited_ids)}
 
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
@@ -66,6 +78,7 @@ def login(request):
         })
     return Response({'error': 'Неверный логин или пароль'}, status=status.HTTP_400_BAD_REQUEST)
 
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
@@ -86,6 +99,7 @@ def register(request):
         'token': token.key
     })
 
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout(request):
