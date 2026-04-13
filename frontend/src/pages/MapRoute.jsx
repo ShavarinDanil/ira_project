@@ -18,71 +18,87 @@ export default function MapRoute() {
   const [routeInfo, setRouteInfo] = useState(null);
   const [geoError, setGeoError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [routingMode, setRoutingMode] = useState('driving'); // 'driving' or 'pedestrian'
+  const [userCoords, setUserCoords] = useState(null);
+
+  // Центр Ханты-Мансийска как крайний случай
+  const HM_CENTER = [61.003, 69.018];
 
   useEffect(() => {
     if (!window.ymaps) {
-      setGeoError('Ошибка: Яндекс Карты не загружены. Проверьте подключение.');
+      setGeoError('Ошибка: Яндекс Карты не загружены');
       setLoading(false);
       return;
     }
 
     window.ymaps.ready(() => {
-      // Инициализация карты
       const map = new window.ymaps.Map(mapRef.current, {
-        center: [destLat || 61.003, destLon || 69.018], // Дефолт на ХМ
+        center: [destLat || HM_CENTER[0], destLon || HM_CENTER[1]],
         zoom: 12,
-        controls: ['zoomControl', 'fullscreenControl', 'typeSelector']
+        controls: ['zoomControl', 'fullscreenControl']
       }, {
-        suppressMapOpenBlock: true // Убираем лишние кнопки Яндекса снизу
+        suppressMapOpenBlock: true
       });
 
       setMapInstance(map);
 
-      // Получаем геопозицию пользователя
-      window.navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const userCoords = [pos.coords.latitude, pos.coords.longitude];
-          buildRoute(map, userCoords, [destLat, destLon]);
-        },
-        (err) => {
-          setGeoError('Геолокация недоступна. Показываем только точку назначения.');
-          // Если нет геопозиции, просто ставим маркер цели
-          map.geoObjects.add(new window.ymaps.Placemark([destLat, destLon], {
-            balloonContent: destName
-          }, {
-            preset: 'islands#redDotIconWithCaption',
-            caption: destName
-          }));
-          setLoading(false);
-        },
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
+      // Шаг 1: Определяем геопозицию через надежный провайдер Яндекса (IP + GPS)
+      window.ymaps.geolocation.get({
+        provider: 'yandex',
+        mapStateAutoApply: true
+      }).then((result) => {
+        const coords = result.geoObjects.get(0).geometry.getCoordinates();
+        console.log("Determined user coords via Yandex:", coords);
+        setUserCoords(coords);
+      }).catch((err) => {
+        console.warn("Yandex geolocation failed, trying browser...", err);
+        // Фолбек на браузерный GPS
+        window.navigator.geolocation.getCurrentPosition(
+          (pos) => setUserCoords([pos.coords.latitude, pos.coords.longitude]),
+          () => {
+            console.error("All geolocation failed. Using city center.");
+            setGeoError("Местоположение не определено. Строим от центра города.");
+            setUserCoords(HM_CENTER);
+          },
+          { timeout: 3000 }
+        );
+      });
     });
 
     return () => {
-      if (mapInstance) {
-        mapInstance.destroy();
-      }
+      if (mapInstance) mapInstance.destroy();
     };
   }, [destLat, destLon]);
 
-  const buildRoute = (map, from, to) => {
-    console.log("Building route from:", from, "to:", to);
+  // Перестраиваем маршрут при изменении координат пользователя или режима
+  useEffect(() => {
+    if (mapInstance && userCoords && destLat && destLon) {
+      buildRoute(mapInstance, userCoords, [destLat, destLon], routingMode);
+    }
+  }, [mapInstance, userCoords, routingMode]);
+
+  const buildRoute = (map, from, to, mode) => {
+    setLoading(true);
+    setRouteInfo(null);
     
+    // Очищаем старые маршруты
+    map.geoObjects.each((obj) => {
+      if (obj.model && obj.model.events) map.geoObjects.remove(obj);
+    });
+
     const multiRoute = new window.ymaps.multiRouter.MultiRoute({
       referencePoints: [from, to],
       params: {
-        routingMode: 'driving' // Явно указываем на машине для надежности
+        routingMode: mode
       }
     }, {
       routeActiveStrokeWidth: 6,
-      routeActiveStrokeColor: "#0D4433",
-      boundsAutoApply: true
+      routeActiveStrokeColor: mode === 'driving' ? "#0D4433" : "#E67E22",
+      boundsAutoApply: true,
+      wayPointVisible: false // Скрываем стандартные точки, оставим только нашу
     });
 
-    // Успешное построение
     multiRoute.model.events.add('requestsuccess', () => {
-      console.log("Route request success");
       const activeRoute = multiRoute.getActiveRoute();
       if (activeRoute) {
         setRouteInfo({
@@ -93,11 +109,15 @@ export default function MapRoute() {
       setLoading(false);
     });
 
-    // Ошибка построения (например, нет дорог)
-    multiRoute.model.events.add('requestfail', (event) => {
-      console.error("Route request failed:", event.get('error'));
-      setGeoError("Не удалось проложить маршрут между этими точками.");
-      setLoading(false);
+    multiRoute.model.events.add('requestfail', () => {
+      console.warn("Route failed in mode:", mode);
+      if (mode === 'driving') {
+        // Если не удалось на машине, пробуем пешком автоматически
+        setRoutingMode('pedestrian');
+      } else {
+        setGeoError("Путь не найден даже пешком.");
+        setLoading(false);
+      }
     });
 
     map.geoObjects.add(multiRoute);
@@ -114,61 +134,69 @@ export default function MapRoute() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', position: 'relative' }}>
-      {/* Header */}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', position: 'relative', background: '#f5f5f5' }}>
+      {/* Header Fixed */}
       <div style={{
         background: 'linear-gradient(135deg, #0D4433 0%, #1C3D5A 100%)',
         color: 'white',
-        padding: '16px 20px',
+        padding: '12px 16px',
         display: 'flex',
-        alignItems: 'center',
-        gap: 12,
+        flexDirection: 'column',
+        gap: 8,
         zIndex: 1000,
         boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-        flexShrink: 0,
       }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: 10, width: 38, height: 38, cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <i className="fas fa-arrow-left"></i>
-        </button>
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          <div style={{ fontWeight: 800, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-             Яндекс.Маршрут до «{destName}»
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={() => navigate(-1)}
+            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', borderRadius: 10, width: 36, height: 36, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <i className="fas fa-arrow-left"></i>
+          </button>
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            <div style={{ fontWeight: 800, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              Куда: {destName}
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.8 }}>
+              {loading ? 'Ищем лучший путь...' : geoError ? geoError : `Готово: ${routeInfo?.distance || ''}`}
+            </div>
           </div>
-          <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
-            {loading ? 'Загрузка маршрута...' : geoError ? geoError : `Путь: ${routeInfo?.distance || ''} · ${routeInfo?.duration || ''}`}
-          </div>
+        </div>
+
+        {/* Mode Selector */}
+        <div style={{ display: 'flex', gap: 8, background: 'rgba(0,0,0,0.2)', padding: 4, borderRadius: 12 }}>
+          <button 
+            onClick={() => setRoutingMode('driving')}
+            style={{ flex: 1, padding: '8px', border: 'none', borderRadius: 8, background: routingMode === 'driving' ? 'white' : 'transparent', color: routingMode === 'driving' ? '#0D4433' : 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer', transition: '0.3s' }}
+          >
+            <i className="fas fa-car"></i> На машине
+          </button>
+          <button 
+            onClick={() => setRoutingMode('pedestrian')}
+            style={{ flex: 1, padding: '8px', border: 'none', borderRadius: 8, background: routingMode === 'pedestrian' ? 'white' : 'transparent', color: routingMode === 'pedestrian' ? '#E67E22' : 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer', transition: '0.3s' }}
+          >
+            <i className="fas fa-walking"></i> Пешком
+          </button>
         </div>
       </div>
 
-      {/* Info Overlay */}
-      {routeInfo && (
+      {/* Stats Overlay Bottom */}
+      {routeInfo && !loading && (
         <div style={{
-          position: 'absolute',
-          bottom: 24,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'rgba(255,255,255,0.95)',
-          padding: '12px 24px',
-          borderRadius: 40,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-          zIndex: 1000,
-          display: 'flex',
-          gap: 20,
-          alignItems: 'center',
-          backdropFilter: 'blur(8px)',
-          border: '1px solid rgba(13,68,51,0.1)'
+          position: 'absolute', bottom: 30, left: 20, right: 20,
+          background: 'rgba(255,255,255,0.95)', padding: '16px', borderRadius: 24,
+          boxShadow: '0 10px 40px rgba(0,0,0,0.2)', zIndex: 1000,
+          display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+          backdropFilter: 'blur(10px)', border: '1px solid rgba(13,68,51,0.1)'
         }}>
-           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-             <i className="fas fa-car" style={{ color: '#0D4433' }}></i>
-             <span style={{ fontWeight: 800, color: '#1C2833' }}>{routeInfo.duration}</span>
+           <div style={{ textAlign: 'center' }}>
+             <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Время</div>
+             <div style={{ fontSize: 18, fontWeight: 900, color: '#0D4433' }}>{routeInfo.duration}</div>
            </div>
-           <div style={{ width: 1, height: 20, background: '#ddd' }}></div>
-           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-             <i className="fas fa-road" style={{ color: '#5D6D7E' }}></i>
-             <span style={{ fontWeight: 600, color: '#5D6D7E' }}>{routeInfo.distance}</span>
+           <div style={{ width: 1, height: 30, background: '#eee' }}></div>
+           <div style={{ textAlign: 'center' }}>
+             <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Дистанция</div>
+             <div style={{ fontSize: 18, fontWeight: 900, color: '#1C3D5A' }}>{routeInfo.distance}</div>
            </div>
         </div>
       )}
@@ -178,16 +206,15 @@ export default function MapRoute() {
 
       {loading && (
         <div style={{
-          position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.8)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 2000
+          position: 'absolute', inset: 0, top: 100, background: 'rgba(255,255,255,0.7)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 900
         }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🗺️</div>
-          <div style={{ fontWeight: 700, color: '#0D4433' }}>Строим оптимальный путь...</div>
+          <div style={{ width: 40, height: 40, border: '4px solid #0D4433', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
         </div>
       )}
 
       <style>{`
-        .ymaps-2-1-79-map { border-radius: 0; }
+        @keyframes spin { to { transform: rotate(360deg); } }
         .ymaps-2-1-79-copyrights-promo { display: none !important; }
       `}</style>
     </div>
