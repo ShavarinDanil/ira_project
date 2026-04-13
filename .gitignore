@@ -17,3 +17,14 @@ node_modules/
 
 # SQLite WASM
 public/sqljs/
+
+# Binaries & Builds
+*.apk
+*.exe
+yugra_guide.apk
+frontend/dist/
+frontend/electron/dist/
+frontend/electron/build/
+frontend/electron/node_modules/
+frontend/android/app/build/
+frontend/android/.gradle/

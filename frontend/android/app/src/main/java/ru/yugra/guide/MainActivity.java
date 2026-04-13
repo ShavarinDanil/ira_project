@@ -1,4 +1,4 @@
-package ru.ugra.guide;
+package ru.yugra.guide;
 
 import com.getcapacitor.BridgeActivity;
 

@@ -27,22 +27,50 @@ export default function Feed() {
 
   const toggleFav = async (id, e) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    // Optimistic Update
+    const { fav_ids } = data.meta;
+    const isAdding = !fav_ids.includes(id);
+    const newFavs = isAdding ? [...fav_ids, id] : fav_ids.filter(fid => fid !== id);
+    
+    setData({ ...data, meta: { ...data.meta, fav_ids: newFavs } });
+
     try {
       const res = await localApi.toggleFavorite(id);
-      const { fav_ids } = data.meta;
-      const newFavs = res.status === 'added' ? [...fav_ids, id] : fav_ids.filter(fid => fid !== id);
-      setData({ ...data, meta: { ...data.meta, fav_ids: newFavs } });
-    } catch {}
+      // Backend status is the source of truth, but we already updated local state.
+      // If we want to be 100% sure sync is perfect, we could re-check res.status.
+    } catch (err) {
+      console.error("Failed to toggle favorite:", err);
+      // Revert on error
+      setData({ ...data, meta: { ...data.meta, fav_ids: fav_ids } });
+      if (err.response?.status === 401) {
+        navigate('/login?next=' + window.location.pathname);
+      }
+    }
   };
 
   const toggleVisit = async (id, e) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    // Optimistic Update
+    const { visited_ids } = data.meta;
+    const isAdding = !visited_ids.includes(id);
+    const newVisits = isAdding ? [...visited_ids, id] : visited_ids.filter(vid => vid !== id);
+    
+    setData({ ...data, meta: { ...data.meta, visited_ids: newVisits } });
+
     try {
       const res = await localApi.toggleVisited(id);
-      const { visited_ids } = data.meta;
-      const newVisits = res.status === 'added' ? [...visited_ids, id] : visited_ids.filter(vid => vid !== id);
-      setData({ ...data, meta: { ...data.meta, visited_ids: newVisits } });
-    } catch {}
+    } catch (err) {
+      console.error("Failed to toggle visit:", err);
+      // Revert on error
+      setData({ ...data, meta: { ...data.meta, visited_ids: visited_ids } });
+      if (err.response?.status === 401) {
+        navigate('/login?next=' + window.location.pathname);
+      }
+    }
   };
 
   const getAppropriateImage = (name, id) => {

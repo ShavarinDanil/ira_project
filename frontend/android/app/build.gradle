@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "ru.ugra.guide"
+    namespace = "ru.yugra.guide"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "ru.ugra.guide"
+        applicationId "ru.yugra.guide"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
