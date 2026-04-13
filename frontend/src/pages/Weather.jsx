@@ -14,8 +14,11 @@ export default function Weather() {
   useEffect(() => {
     setLoading(true);
     localApi.getWeather(cityIndex)
-      .then(res => setData(res))
-      .catch(err => console.error(err))
+      .then(res => {
+        console.log("Weather debug:", res);
+        setData(res);
+      })
+      .catch(err => console.error("Weather fetch error:", err))
       .finally(() => setLoading(false));
   }, [cityIndex]);
 
@@ -55,17 +58,17 @@ export default function Weather() {
         </div>
         <div className="weather-detail-card">
           <div className="weather-detail-icon"><i className="fas fa-tint"></i></div>
-          <div className="weather-detail-val">~70%</div>
+          <div className="weather-detail-val">{weather.humidity}%</div>
           <div className="weather-detail-lbl">Влажность</div>
         </div>
         <div className="weather-detail-card">
           <div className="weather-detail-icon"><i className="fas fa-temperature-low"></i></div>
-          <div className="weather-detail-val">{weather.temperature - 2}°C</div>
+          <div className="weather-detail-val">{weather.apparent_temp}°C</div>
           <div className="weather-detail-lbl">Ощущается как</div>
         </div>
         <div className="weather-detail-card">
           <div className="weather-detail-icon"><i className="fas fa-compress-arrows-alt"></i></div>
-          <div className="weather-detail-val">758 мм рт.ст.</div>
+          <div className="weather-detail-val">{weather.pressure} мм рт.ст.</div>
           <div className="weather-detail-lbl">Давление</div>
         </div>
       </div>

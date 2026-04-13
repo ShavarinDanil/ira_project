@@ -25,33 +25,53 @@ KMAO_CITIES = [
 
 def get_weather_data(city_index=0):
     city = KMAO_CITIES[city_index % len(KMAO_CITIES)]
+    headers = {
+        'User-Agent': 'YugraGuideApp/1.0 (Contact: yugra-guide-dev@onrender.com)',
+        'Accept': 'application/json'
+    }
+    debug_info = "Success"
     try:
-        # Use current parameters instead of legacy current_weather
         url = (
             f"https://api.open-meteo.com/v1/forecast"
             f"?latitude={city['lat']}&longitude={city['lon']}"
             f"&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,surface_pressure"
         )
-        # Increased timeout to 3s
-        r = requests.get(url, timeout=3.0)
+        print(f"Fetching weather for {city['name']}: {url}")
+        
+        r = requests.get(url, timeout=5.0, headers=headers)
+        
+        if r.status_code != 200:
+            debug_info = f"API returned status {r.status_code}"
+            print(f"Weather API error {r.status_code}: {r.text}")
+            raise Exception(debug_info)
+
         data = r.json()
-        current = data.get('current', {})
+        current = data.get('current')
+        
+        if not current:
+            debug_info = "API response missing 'current' field"
+            print(f"Weather API error: {data}")
+            raise Exception(debug_info)
         
         return {
             'temperature': current.get('temperature_2m', 0),
             'humidity': current.get('relative_humidity_2m', 0),
             'apparent_temp': current.get('apparent_temperature', 0),
             'windspeed': current.get('wind_speed_10m', 0),
-            'pressure': round(current.get('surface_pressure', 0) * 0.750062, 1), # Convert hPa to mmHg
+            'pressure': round(current.get('surface_pressure', 0) * 0.750062, 1),
             'city': city['name'],
             'all_cities': [c['name'] for c in KMAO_CITIES],
+            'debug': debug_info
         }
     except Exception as e:
-        print(f"Weather error: {e}")
+        err_msg = str(e)
+        print(f"Weather error for {city['name']}: {err_msg}")
         return {
             'temperature': 0, 'humidity': 0, 'apparent_temp': 0, 
             'windspeed': 0, 'pressure': 0, 
-            'city': city['name'], 'all_cities': [c['name'] for c in KMAO_CITIES]
+            'city': city['name'], 
+            'all_cities': [c['name'] for c in KMAO_CITIES],
+            'debug': f"Error: {err_msg}"
         }
 
 def get_meta(user):
