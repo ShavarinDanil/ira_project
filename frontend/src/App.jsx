@@ -60,9 +60,10 @@ function App() {
   useEffect(() => {
     localApi.getCurrentUser()
       .then(u => {
-        if (u) setUser(u);
+        if (u && u.id) setUser(u);
+        else setUser(null);
       })
-      .catch(() => {})
+      .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
 

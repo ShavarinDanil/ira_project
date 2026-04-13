@@ -264,4 +264,4 @@ def weather(request):
 def current_user(request):
     if request.user.is_authenticated:
         return Response(UserSerializer(request.user).data)
-    return Response(None)
+    return Response({'error': 'Not authenticated'}, status=status.HTTP_401_UNAUTHORIZED)
